@@ -1,0 +1,15 @@
+# Gemini CLI/Agent files
+.gemini/
+MEMORY.md
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
