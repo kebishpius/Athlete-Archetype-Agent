@@ -60,7 +60,7 @@ def generate_profile(height, weight, age, cluster_id):
 
     archetype_info = archetypes_data[cluster_id]
     
-    os.environ["GEMINI_API_KEY"] = "AIzaSyDiPQbvLUo4WzRO0kBxYTpRZlnU3oqpGtA"
+    os.environ["GEMINI_API_KEY"] = "YOUR_API_KEY"
     client = genai.Client()
     
     prompt = f"""
