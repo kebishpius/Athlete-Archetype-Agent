@@ -2,3 +2,7 @@ google-cloud-bigquery
 pandas
 db-dtypes
 pyarrow
+google-genai
+fastapi
+uvicorn
+streamlit
