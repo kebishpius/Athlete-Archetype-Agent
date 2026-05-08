@@ -1,45 +1,70 @@
-# USA Athlete Archetype Guide
+# Athlete Archetype Agent (Team USA Hackathon)
 
-An AI-powered Streamlit web application that allows fans to input their biometric data (Height, Weight, and Age) to discover their historical athlete archetype based on 120 years of Olympic data.
+A premium, multimodal AI-powered platform that uses 120 years of historical Olympic and Paralympic data to help fans discover their "Athlete Archetype." 
 
-## Overview
+Built with **Google ADK**, **React**, and **Gemini 3.1 Flash-lite** for Challenge 4 of the Team USA Hackathon.
 
-The application utilizes:
-- **BigQuery ML** (`Olympic_Data.athlete_archetypes`) to cluster users into specific athlete archetypes based on historic biometric records.
-- **Google Gemini 2.5 Flash** to dynamically generate personalized, encouraging, and analytical profiles comparing the user's biometrics to both Olympic and Paralympic athletes.
-- **Streamlit** for the frontend, featuring a modern, generative-AI inspired UI with badges for suggested sport matches.
+## Features
+
+- **Layered Interaction**: A "Digital Mirror" entry point where users upload an image to begin their journey.
+- **Multimodal Analysis**: Analyzes both user biometrics (Height, Weight, Age) and uploaded images using Gemini 3.1 Flash-lite.
+- **Historical Clustering**: Integrates with **BigQuery ML** (`Olympic_Data.athlete_archetypes`) to map users to historical archetypes (e.g., Powerhouse, Leverage, Agility).
+- **Paralympic Parity**: Provides equal analytical depth and technically rigorous explanations for Paralympic classifications.
+- **Premium UI**: Modern Glassmorphism aesthetic with micro-animations (Framer Motion) and interactive Radar Charts (Recharts).
+
+## Tech Stack
+
+- **Frontend**: React (Vite), Framer Motion, Axios, Recharts, Lucide-React.
+- **Backend**: Python (FastAPI), Google Agent Development Kit (ADK).
+- **AI Model**: `gemini-3.1-flash-lite` on Vertex AI (`global` region).
+- **Infrastructure**: Google Cloud Run (Single-container multi-stage build).
+- **Data**: BigQuery ML.
 
 ## Getting Started
 
 ### Prerequisites
+- Python 3.11+
+- Node.js 20+
+- Google Cloud CLI (`gcloud`)
+- `uv` (for Python package management)
+- `agents-cli` (`pip install google-agents-cli`)
 
-Ensure you have the following installed:
-- Python 3.8+
-- Required packages (found in `requirements.txt`)
-- Google Cloud credentials configured (for BigQuery access)
-- Gemini API Key
+### Local Development
 
-### Installation
-
-1. Clone this repository (if applicable) or download the source code.
-2. Install the required Python dependencies:
+1. **Install Dependencies**:
    ```bash
-   pip install -r requirements.txt
+   # Backend
+   uv sync
+   
+   # Frontend
+   cd frontend
+   npm install
    ```
 
-### Configuration
+2. **Run Locally**:
+   ```bash
+   # Terminal 1: Backend (FastAPI)
+   uv run uvicorn app.fast_api_app:app --reload --port 8000
+   
+   # Terminal 2: Frontend (Vite)
+   cd frontend
+   npm run dev
+   ```
 
-Ensure your `GEMINI_API_KEY` is set correctly in `app.py` or as an environment variable before running the application.
+### Deployment
 
-### Running the App
-
-To start the local Streamlit server, run:
+To deploy to Google Cloud Run:
 ```bash
-python -m streamlit run app.py
+gcloud run deploy athlete-archetype-agent --source . --project hackathons-461900 --region us-central1 --allow-unauthenticated
 ```
-Then, open your web browser and navigate to `http://localhost:8501`.
 
-## Usage
-- Enter your **Height (cm)**, **Weight (kg)**, and **Age**.
-- Click **"Generate Profile"**.
-- View your unique historical archetype, detailed AI-generated profile, and Olympic/Paralympic sport recommendations presented via clean UI badges.
+## Hackathon Compliance
+
+- **Challenge 4**: Specifically designed for "The Athlete Archetype Agent".
+- **Conditional Phrasing**: Uses non-deterministic language (e.g., "Your profile could suggest") to avoid guaranteeing results.
+- **Paralympic Clause**: Integrated at the core of the agent's system instructions to ensure parity.
+- **Vertex AI**: Native integration via ADK.
+- **Cloud Run**: Fully containerized and deployed.
+
+---
+© 2026 Team USA Hackathon • Built with ❤️ using Google AI
