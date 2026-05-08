@@ -4,9 +4,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-# Pass the API URL as a build arg
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
+# Hardcode the backend URL so Vite bakes it into the bundle at build time
+ENV VITE_API_URL=https://athlete-archetype-agent-602402744184.us-central1.run.app
 RUN npm run build
 
 # Production stage

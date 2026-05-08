@@ -28,45 +28,49 @@ function App() {
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      // Prepare multimodal request
-      const formData = new FormData();
-      
-      // In ADK, we typically send JSON to /run, but we need to handle the image.
-      // If we use the standard ADK /run endpoint, it might expect a specific format.
-      // For this hackathon, I'll implement a helper on the backend or use a multipart request.
-      // Actually, I'll just send the message as a structured request.
-      
-      // Simplified: Just send biometrics and image base64 for now
-      const payload = {
-        message: `My biometrics are: Height ${biometrics.height}cm, Weight ${biometrics.weight}kg, Age ${biometrics.age}.`,
-        image: imagePreview?.split(',')[1] // Base64 content
-      };
+      const userId = `user-${crypto.randomUUID()}`;
 
+      // Step 1: Create a session
+      const sessionRes = await axios.post(`${API_BASE_URL}/apps/app/users/${userId}/sessions`);
+      const sessionId = sessionRes.data.id;
+
+      // Step 2: Build the message parts
+      const messageParts = [
+        { text: `My biometrics are: Height ${biometrics.height}cm, Weight ${biometrics.weight}kg, Age ${biometrics.age}. Please find my athlete archetype.` }
+      ];
+
+      // Include image if provided
+      if (image && imagePreview) {
+        messageParts.push({
+          inline_data: {
+            mime_type: image.type,
+            data: imagePreview.split(',')[1]
+          }
+        });
+      }
+
+      // Step 3: Run the agent
       const response = await axios.post(`${API_BASE_URL}/run`, {
         appName: "app",
-        userId: "demo-user",
-        sessionId: "demo-session",
+        userId: userId,
+        sessionId: sessionId,
         newMessage: {
           role: "user",
-          parts: [
-            { text: payload.message },
-            { inline_data: { mime_type: image.type, data: payload.image } }
-          ]
+          parts: messageParts
         }
       });
 
-      // ADK returns an array of events. We'll aggregate the text parts.
-      const responseData = response.data;
-      const events = Array.isArray(responseData) ? responseData : (responseData.events || []);
-      
+      // Step 4: Parse the array-of-events response
+      const events = Array.isArray(response.data) ? response.data : [];
       const textResponse = events
         .filter(e => e.content && e.content.parts)
         .flatMap(e => e.content.parts)
-        .map(p => p.text || "")
+        .filter(p => p.text)
+        .map(p => p.text)
         .join("");
 
       if (!textResponse) {
-        throw new Error("Empty response from agent");
+        throw new Error("Empty response from agent. Please try again.");
       }
 
       setResult(textResponse);
