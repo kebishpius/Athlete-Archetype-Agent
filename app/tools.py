@@ -1,8 +1,9 @@
 from google.cloud import bigquery
 import os
 import google.auth
+from typing import List, Dict, Any
 
-def get_athlete_cluster(height: float, weight: float, age: int) -> dict:
+def get_athlete_cluster(height: float, weight: float, age: int) -> Dict[str, Any]:
     """
     Queries the BigQuery ML model to find the athlete archetype cluster for a given biometric profile.
     
@@ -51,3 +52,12 @@ def get_athlete_cluster(height: float, weight: float, age: int) -> dict:
         return {"cluster_id": cluster_id, "label": labels.get(cluster_id, "Unknown")}
     except Exception as e:
         return {"error": f"BigQuery error: {str(e)}"}
+
+def display_athlete_matches(matches: List[Dict[str, Any]]) -> str:
+    """
+    Triggers the display of athlete match cards in the UI.
+    
+    Args:
+        matches: A list of athlete dictionaries with keys: Name, Sport, Event, Medal, Year, is_2028.
+    """
+    return "UI updated with athlete matches."
