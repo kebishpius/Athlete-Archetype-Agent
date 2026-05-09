@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { Upload, User, Activity, Award, ChevronRight, Loader2, Star, MapPin } from 'lucide-react';
+import { Upload, User, Activity, Award, ChevronRight, Loader2, Star, MapPin, Camera, Download, Share2, X, FlipHorizontal } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
+
+import ReactMarkdown from 'react-markdown';
 
 const MatchCard = ({ athlete }) => (
   <motion.div 
@@ -38,6 +40,210 @@ function App() {
   const [streamingText, setStreamingText] = useState("");
   const [agentStatus, setAgentStatus] = useState(null);
   const [matches, setMatches] = useState([]);
+  const [stats, setStats] = useState([
+    { subject: 'Power', A: 0, B: 0 },
+    { subject: 'Agility', A: 0, B: 0 },
+    { subject: 'Endurance', A: 0, B: 0 },
+    { subject: 'Speed', A: 0, B: 0 },
+    { subject: 'Strategy', A: 0, B: 0 },
+  ]);
+  const [insight, setInsight] = useState("Your physical signature is being calculated...");
+  const [victoryShot, setVictoryShot] = useState(null);
+  const [isGeneratingShot, setIsGeneratingShot] = useState(false);
+  const [shotError, setShotError] = useState(null);
+  const victoryShotRef = useRef(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+
+  // ── Camera state ──
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
+  const [cameraFacing, setCameraFacing] = useState('user'); // 'user' = front, 'environment' = back
+  const [isCaptureFlash, setIsCaptureFlash] = useState(false);
+  const videoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  // Convert base64 data-URL to a File object
+  const dataUrlToFile = (dataUrl, filename) => {
+    const [header, data] = dataUrl.split(',');
+    const mime = header.match(/:(.*?);/)[1];
+    const binary = atob(data);
+    const arr = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+    return new File([arr], filename, { type: mime });
+  };
+
+  const shareText = matches[0]
+    ? `🏅 I just discovered my Team USA archetype — I'm built like ${matches[0].Name} in ${matches[0].Sport}! Find yours 👇 #TeamUSA #Olympics #AthleteArchetype`
+    : `🏅 I just discovered my Team USA Olympic archetype! #TeamUSA #Olympics`;
+
+  const showToast = (msg, duration = 4000) => {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), duration);
+  };
+
+  // Unified share handler:
+  // 1. On mobile / Web Share API capable: hands the image file directly to the chosen app.
+  // 2. On desktop: copies image to clipboard + opens the platform with pre-filled text.
+  const handleShareToPlatform = async (platform) => {
+    if (!victoryShot) return;
+
+    const file = dataUrlToFile(victoryShot, 'TeamUSA_VictoryShot.png');
+
+    // -- Mobile / native share path --
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'My Team USA Victory Shot', text: shareText });
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return; // user cancelled
+        // fall through to desktop path
+      }
+    }
+
+    // -- Desktop path: clipboard + open platform --
+    const platformUrls = {
+      twitter:   `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`,
+      facebook:  `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent('https://teamusa.org')}&quote=${encodeURIComponent(shareText)}`,
+      linkedin:  `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://teamusa.org')}`,
+      instagram: null, // no web intent; clipboard is the only path
+    };
+
+    // Try to copy image to clipboard so user can paste directly into the post
+    let copied = false;
+    try {
+      const res = await fetch(victoryShot);
+      const blob = await res.blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      copied = true;
+    } catch {
+      // Clipboard API not supported or denied
+    }
+
+    const url = platformUrls[platform];
+    if (url) window.open(url, '_blank');
+
+    if (copied) {
+      showToast(`📋 Victory Shot copied! Paste it (Ctrl+V / ⌘V) into your ${platform === 'twitter' ? 'tweet' : platform === 'instagram' ? 'Instagram story' : 'post'}.`);
+    } else {
+      showToast(`💡 Download the image and attach it to your post manually.`);
+    }
+  };
+
+  // ── Camera helpers ──
+  const startCamera = async (facing = cameraFacing) => {
+    setCameraError(null);
+    try {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      setCameraError('Camera access denied. Please allow camera permissions and try again.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      cameraStreamRef.current = null;
+    }
+    setShowCamera(false);
+    setCameraError(null);
+  };
+
+  const flipCamera = () => {
+    const next = cameraFacing === 'user' ? 'environment' : 'user';
+    setCameraFacing(next);
+    startCamera(next);
+  };
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+
+    // Mirror front camera so captured image matches what user sees
+    if (cameraFacing === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0);
+
+    // Flash animation
+    setIsCaptureFlash(true);
+    setTimeout(() => setIsCaptureFlash(false), 300);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+    // Build a File object so the rest of the app treats it like an upload
+    const arr = dataUrl.split(',');
+    const bstr = atob(arr[1]);
+    const bytes = new Uint8Array(bstr.length);
+    for (let i = 0; i < bstr.length; i++) bytes[i] = bstr.charCodeAt(i);
+    const file = new File([bytes], 'camera-shot.jpg', { type: 'image/jpeg' });
+
+    setImage(file);
+    setImagePreview(dataUrl);
+    stopCamera();
+    setStep(2);
+  };
+
+  // Attach stream to video element whenever camera modal opens
+  useEffect(() => {
+    if (showCamera) {
+      startCamera(cameraFacing);
+    }
+    return () => {
+      if (!showCamera && cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCamera]);
+
+  const handleRestart = () => {
+    setStep(1);
+    setImage(null);
+    setImagePreview(null);
+    setBiometrics({ height: 180, weight: 75, age: 25 });
+    setLoading(false);
+    setResult(null);
+    setChatHistory([]);
+    setUserId(null);
+    setSessionId(null);
+    setFollowUpMessage('');
+    setStreamingText('');
+    setAgentStatus(null);
+    setMatches([]);
+    setStats([
+      { subject: 'Power', A: 0, B: 0 },
+      { subject: 'Agility', A: 0, B: 0 },
+      { subject: 'Endurance', A: 0, B: 0 },
+      { subject: 'Speed', A: 0, B: 0 },
+      { subject: 'Strategy', A: 0, B: 0 },
+    ]);
+    setInsight('Your physical signature is being calculated...');
+    setVictoryShot(null);
+    setIsGeneratingShot(false);
+    setShotError(null);
+    setShowShareModal(false);
+  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -111,6 +317,18 @@ function App() {
 
             if (toolName === 'display_athlete_matches' && part.functionCall.args?.matches) {
               setMatches(part.functionCall.args.matches);
+            }
+            if (toolName === 'display_comparative_analytics' && part.functionCall.args?.user_stats) {
+              const u = part.functionCall.args.user_stats;
+              const a = part.functionCall.args.archetype_average || {};
+              setInsight(part.functionCall.args.key_insight || "");
+              setStats([
+                { subject: 'Power', A: u.Power || 0, B: a.Power || 0 },
+                { subject: 'Agility', A: u.Agility || 0, B: a.Agility || 0 },
+                { subject: 'Endurance', A: u.Endurance || 0, B: a.Endurance || 0 },
+                { subject: 'Speed', A: u.Speed || 0, B: a.Speed || 0 },
+                { subject: 'Strategy', A: u.Strategy || 0, B: a.Strategy || 0 },
+              ]);
             }
           }
 
@@ -193,6 +411,27 @@ function App() {
     await streamAgentResponse(userId, sessionId, userMessage.parts, true);
   };
 
+  const handleBiometricChange = (field, value) => {
+    setBiometrics(prev => ({ ...prev, [field]: value }));
+  };
+
+  const validateBiometrics = (field) => {
+    const limits = {
+      height: { min: 50, max: 300 },
+      weight: { min: 5, max: 500 },
+      age: { min: 1, max: 100 }
+    };
+    const { min, max } = limits[field];
+    const val = parseFloat(biometrics[field]);
+    
+    if (isNaN(val)) return;
+    
+    const clamped = Math.min(Math.max(val, min), max);
+    if (clamped !== val) {
+      setBiometrics(prev => ({ ...prev, [field]: clamped }));
+    }
+  };
+
   return (
     <div className="app-container">
       <header style={{ textAlign: 'center', marginBottom: '3rem' }}>
@@ -204,12 +443,12 @@ function App() {
         >
           TEAM USA
         </motion.h1>
-        <p style={{ color: 'var(--gold)', letterSpacing: '4px', textTransform: 'uppercase', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+        <p style={{ color: 'var(--white)', letterSpacing: '4px', textTransform: 'uppercase', fontSize: '0.8rem', marginTop: '0.5rem', opacity: 0.8 }}>
           Athlete Archetype Agent
         </p>
       </header>
 
-      <main style={{ width: '100%', maxWidth: '800px' }}>
+      <main style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div 
@@ -219,17 +458,123 @@ function App() {
               exit={{ opacity: 0, scale: 1.05 }}
               className="glass-card"
             >
-              <h2 style={{ color: 'var(--gold)', marginBottom: '1rem' }}>Layer 1: The Digital Mirror</h2>
-              <p style={{ opacity: 0.8, marginBottom: '2rem' }}>Upload a photo to begin your alignment with 120 years of Team USA history.</p>
-              
-              <label className="image-upload-zone">
-                <input type="file" hidden onChange={handleImageUpload} accept="image/*" />
-                <Upload size={48} color="var(--gold)" style={{ marginBottom: '1rem' }} />
-                <p>Drag & Drop or Click to Upload</p>
-                <p style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '0.5rem' }}>JPG, PNG or WEBP (Max 5MB)</p>
-              </label>
+              <h2 style={{ color: 'var(--gold)', marginBottom: '0.5rem' }}>Layer 1: The Digital Mirror</h2>
+              <p style={{ opacity: 0.8, marginBottom: '2rem' }}>Choose how to add your photo to begin your alignment with 120 years of Team USA history.</p>
+
+              <div className="capture-options">
+                {/* Upload option */}
+                <label className="capture-option" htmlFor="file-upload-input">
+                  <input
+                    id="file-upload-input"
+                    type="file"
+                    hidden
+                    onChange={handleImageUpload}
+                    accept="image/*"
+                  />
+                  <div className="capture-option-icon upload-icon">
+                    <Upload size={36} color="var(--gold)" />
+                  </div>
+                  <h3>Upload Photo</h3>
+                  <p>Choose an image from your device</p>
+                  <span className="capture-option-hint">JPG, PNG or WEBP · Max 5MB</span>
+                </label>
+
+                <div className="capture-divider">
+                  <span>or</span>
+                </div>
+
+                {/* Camera option */}
+                <button
+                  className="capture-option camera-option"
+                  onClick={() => setShowCamera(true)}
+                >
+                  <div className="capture-option-icon camera-icon">
+                    <Camera size={36} color="var(--usa-red)" />
+                  </div>
+                  <h3>Take a Photo</h3>
+                  <p>Use your camera for a live shot</p>
+                  <span className="capture-option-hint">Front or rear camera supported</span>
+                </button>
+              </div>
             </motion.div>
           )}
+
+          {/* ── Camera Modal ── */}
+          <AnimatePresence>
+            {showCamera && (
+              <motion.div
+                className="camera-modal-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <motion.div
+                  className="camera-modal"
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+                >
+                  {/* Header */}
+                  <div className="camera-header">
+                    <span className="camera-title">📷 Take Your Photo</span>
+                    <button className="camera-close-btn" onClick={stopCamera}>
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Viewfinder */}
+                  <div className="camera-viewfinder">
+                    {cameraError ? (
+                      <div className="camera-error">
+                        <Camera size={48} style={{ opacity: 0.4, marginBottom: '1rem' }} />
+                        <p>{cameraError}</p>
+                        <button className="btn-primary" style={{ marginTop: '1rem', width: 'auto', padding: '0.75rem 2rem' }} onClick={() => startCamera()}>
+                          Try Again
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className={`camera-video ${cameraFacing === 'user' ? 'mirrored' : ''}`}
+                        />
+                        {isCaptureFlash && <div className="camera-flash" />}
+                        {/* Corner guides */}
+                        <div className="camera-guide tl" />
+                        <div className="camera-guide tr" />
+                        <div className="camera-guide bl" />
+                        <div className="camera-guide br" />
+                      </>
+                    )}
+                  </div>
+
+                  {/* Controls */}
+                  <div className="camera-controls">
+                    <button className="camera-flip-btn" onClick={flipCamera} title="Flip camera">
+                      <FlipHorizontal size={22} />
+                    </button>
+
+                    <button
+                      className="camera-capture-btn"
+                      onClick={capturePhoto}
+                      disabled={!!cameraError}
+                      title="Capture photo"
+                    >
+                      <div className="camera-capture-inner" />
+                    </button>
+
+                    <div style={{ width: 48 }} />{/* spacer to balance flip btn */}
+                  </div>
+
+                  <canvas ref={canvasRef} style={{ display: 'none' }} />
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {step === 2 && (
             <motion.div 
@@ -254,8 +599,11 @@ function App() {
                 <input 
                   type="number" 
                   className="input-field" 
+                  min="50"
+                  max="300"
                   value={biometrics.height} 
-                  onChange={(e) => setBiometrics({...biometrics, height: e.target.value})}
+                  onChange={(e) => handleBiometricChange('height', e.target.value)}
+                  onBlur={() => validateBiometrics('height')}
                 />
               </div>
 
@@ -264,8 +612,11 @@ function App() {
                 <input 
                   type="number" 
                   className="input-field" 
+                  min="5"
+                  max="500"
                   value={biometrics.weight} 
-                  onChange={(e) => setBiometrics({...biometrics, weight: e.target.value})}
+                  onChange={(e) => handleBiometricChange('weight', e.target.value)}
+                  onBlur={() => validateBiometrics('weight')}
                 />
               </div>
 
@@ -274,8 +625,11 @@ function App() {
                 <input 
                   type="number" 
                   className="input-field" 
+                  min="1"
+                  max="100"
                   value={biometrics.age} 
-                  onChange={(e) => setBiometrics({...biometrics, age: e.target.value})}
+                  onChange={(e) => handleBiometricChange('age', e.target.value)}
+                  onBlur={() => validateBiometrics('age')}
                 />
               </div>
 
@@ -294,9 +648,9 @@ function App() {
               style={{ maxWidth: '800px' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 className="gradient-text" style={{ margin: 0 }}>Your Historical Archetype</h2>
+                <h2 className="gold-title" style={{ margin: 0 }}>Your Historical Archetype</h2>
                 <button 
-                  onClick={() => setStep(1)} 
+                  onClick={handleRestart} 
                   style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: '0.875rem' }}
                 >
                   Restart
@@ -306,7 +660,7 @@ function App() {
               <div className="chat-container">
                 {chatHistory.filter(msg => msg.role === "model" || (msg.role === "user" && msg.parts[0].text.length < 500)).map((msg, idx) => (
                   <div key={idx} className={`chat-bubble ${msg.role}`}>
-                    {msg.parts[0].text}
+                    <ReactMarkdown>{msg.parts[0].text}</ReactMarkdown>
                   </div>
                 ))}
 
@@ -346,23 +700,222 @@ function App() {
               </div>
 
               <div style={{ marginTop: '2rem', borderTop: '1px solid var(--glass-border)', paddingTop: '2rem' }}>
-                <h3 style={{ color: 'var(--gold)', marginBottom: '1.5rem' }}>Comparative Analytics</h3>
-                <div style={{ height: '300px', width: '100%' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={[
-                      { subject: 'Power', A: 80, fullMark: 150 },
-                      { subject: 'Agility', A: 98, fullMark: 150 },
-                      { subject: 'Endurance', A: 86, fullMark: 150 },
-                      { subject: 'Speed', A: 99, fullMark: 150 },
-                      { subject: 'Strategy', A: 85, fullMark: 150 },
-                    ]}>
-                      <PolarGrid stroke="var(--glass-border)" />
-                      <PolarAngleAxis dataKey="subject" tick={{ fill: 'white', fontSize: 12 }} />
-                      <Radar name="User" dataKey="A" stroke="var(--gold)" fill="var(--gold)" fillOpacity={0.6} />
-                    </RadarChart>
-                  </ResponsiveContainer>
+                <h3 style={{ color: 'var(--gold)', marginBottom: '1.5rem' }}>Historical Benchmarking</h3>
+                <div className="analytics-dashboard">
+                  <div className="radar-col">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart cx="50%" cy="50%" outerRadius="80%" data={stats}>
+                        <PolarGrid stroke="var(--glass-border)" />
+                        <PolarAngleAxis dataKey="subject" tick={{ fill: 'white', fontSize: 11 }} />
+                        <Radar 
+                          name="Your Signature" 
+                          dataKey="A" 
+                          stroke="var(--usa-red)" 
+                          fill="var(--usa-red)" 
+                          fillOpacity={0.6} 
+                        />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                    <div className="radar-legend">
+                      <span className="legend-item"><span className="dot gold"></span> Your Signature</span>
+                    </div>
+                  </div>
+                  
+                  <div className="insight-col">
+                    <div className="insight-card">
+                      <Award size={24} color="var(--usa-red)" />
+                      <h4>Performance Insight</h4>
+                      <p>{insight}</p>
+                    </div>
+
+                    <div className="stat-summary">
+                      {stats.map((s, i) => (
+                        <div key={i} className="mini-stat">
+                          <span className="label">{s.subject}</span>
+                          <div className="bar-bg">
+                            <motion.div 
+                              className="bar-fill" 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${s.A}%` }}
+                            />
+                          </div>
+                          <span className="value">{s.A}%</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* ── Victory Shot Section ── */}
+                    <div className="victory-shot-section">
+                      <h4 className="victory-shot-title">
+                        <Camera size={18} style={{ marginRight: '0.5rem' }} />
+                        Generate Your Victory Shot
+                      </h4>
+                      <p className="victory-shot-subtitle">
+                        See yourself competing as a Team USA {matches[0]?.Sport || 'Olympic'} athlete — shareable on social media.
+                      </p>
+
+                      {!victoryShot ? (
+                        <button
+                          className="btn-victory"
+                          onClick={async () => {
+                            if (!imagePreview || !matches[0]) return;
+                            setShotError(null);
+                            setIsGeneratingShot(true);
+                            try {
+                              // Strip the data URL prefix to get raw base64
+                              const base64Data = imagePreview.split(',')[1];
+                              const mimeType = imagePreview.split(';')[0].split(':')[1] || 'image/jpeg';
+                              const res = await fetch('http://localhost:8001/generate-action-shot', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  image_base64: base64Data,
+                                  image_mime_type: mimeType,
+                                  sport: matches[0].Sport,
+                                  athlete_name: matches[0].Name,
+                                  archetype_name: matches[0].Event || matches[0].Sport
+                                })
+                              });
+                              if (!res.ok) {
+                                const err = await res.json();
+                                throw new Error(err.detail || 'Generation failed');
+                              }
+                              const data = await res.json();
+                              setVictoryShot(data.image_url);
+                              setTimeout(() => victoryShotRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+                            } catch (err) {
+                              setShotError(err.message);
+                            } finally {
+                              setIsGeneratingShot(false);
+                            }
+                          }}
+                          disabled={isGeneratingShot || !matches[0]}
+                        >
+                          {isGeneratingShot ? (
+                            <><Loader2 size={18} className="spin" style={{ marginRight: '0.5rem' }} />Generating your Victory Shot...</>
+                          ) : (
+                            <><Camera size={18} style={{ marginRight: '0.5rem' }} />Generate Victory Shot 🏅</>
+                          )}
+                        </button>
+                      ) : (
+                        <motion.div
+                          ref={victoryShotRef}
+                          className="victory-shot-card"
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+                        >
+                          <div className="victory-shot-badge">🥇 VICTORY SHOT</div>
+                          <img
+                            src={victoryShot}
+                            alt={`You as a Team USA ${matches[0].Sport} athlete`}
+                            className="victory-shot-img"
+                          />
+                          <div className="victory-shot-footer">
+                            <p><strong>You</strong> competing as a {matches[0].Sport} athlete — inspired by <strong>{matches[0].Name}</strong></p>
+                            <div className="victory-shot-actions">
+                              <button className="btn-share share-main" onClick={() => setShowShareModal(true)}>
+                                <Share2 size={16} style={{ marginRight: '0.4rem' }} />Share
+                              </button>
+                              <a href={victoryShot} download="TeamUSA_VictoryShot.png" className="btn-share download">
+                                <Download size={16} style={{ marginRight: '0.4rem' }} />Download
+                              </a>
+                              <button className="btn-share regenerate" onClick={() => setVictoryShot(null)}>
+                                Regenerate
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                      {shotError && (
+                        <p className="shot-error">⚠ {shotError}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Social Share Modal ── */}
+        {showShareModal && (
+          <div className="share-modal-overlay" onClick={() => setShowShareModal(false)}>
+            <motion.div
+              className="share-modal"
+              initial={{ opacity: 0, scale: 0.85, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="share-modal-header">
+                <h3>🏅 Share Your Victory Shot</h3>
+                <button className="share-modal-close" onClick={() => setShowShareModal(false)}>✕</button>
+              </div>
+
+              <img src={victoryShot} alt="Victory Shot preview" className="share-preview-img" />
+
+              <p className="share-caption">{shareText}</p>
+
+              <div className="share-how-it-works">
+                <span>📱</span>
+                <span><strong>Mobile:</strong> your photo opens directly in the app &nbsp;•&nbsp; <strong>Desktop:</strong> image auto-copied, just paste into your post</span>
+              </div>
+
+              <div className="share-platforms">
+
+                {/* Twitter / X */}
+                <button className="share-platform twitter" onClick={() => handleShareToPlatform('twitter')}>
+                  <span className="platform-icon">𝕏</span>
+                  <span>Twitter / X</span>
+                </button>
+
+                {/* Facebook */}
+                <button className="share-platform facebook" onClick={() => handleShareToPlatform('facebook')}>
+                  <span className="platform-icon">f</span>
+                  <span>Facebook</span>
+                </button>
+
+                {/* LinkedIn */}
+                <button className="share-platform linkedin" onClick={() => handleShareToPlatform('linkedin')}>
+                  <span className="platform-icon">in</span>
+                  <span>LinkedIn</span>
+                </button>
+
+                {/* Instagram */}
+                <button className="share-platform instagram" onClick={() => handleShareToPlatform('instagram')}>
+                  <span className="platform-icon">📷</span>
+                  <span>Instagram</span>
+                </button>
+
+                {/* Native share (mobile) */}
+                <button className="share-platform native" onClick={() => handleShareToPlatform('twitter')}>
+                  <span className="platform-icon"><Share2 size={18} /></span>
+                  <span>More Apps…</span>
+                </button>
+
+                {/* Download */}
+                <a href={victoryShot} download="TeamUSA_VictoryShot.png" className="share-platform download-full">
+                  <span className="platform-icon"><Download size={18} /></span>
+                  <span>Save Image</span>
+                </a>
+
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* ── Toast Notification ── */}
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              className="share-toast"
+              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 40, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+            >
+              {toast}
             </motion.div>
           )}
         </AnimatePresence>

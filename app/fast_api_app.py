@@ -12,20 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 
 import google.auth
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
-from google.cloud import logging as google_cloud_logging
 
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
 
 setup_telemetry()
-_, project_id = google.auth.default()
-logging_client = google_cloud_logging.Client()
-logger = logging_client.logger(__name__)
+
+# Resolve GCP project — fall back gracefully when running locally
+try:
+    _, project_id = google.auth.default()
+except Exception:
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "hackathons-461900")
+
+# Cloud Logging — only available when running on GCP / with valid ADC
+try:
+    from google.cloud import logging as google_cloud_logging
+    logging_client = google_cloud_logging.Client(project=project_id)
+    logger = logging_client.logger(__name__)
+    _use_cloud_logging = True
+except Exception:
+    _local_logger = logging.getLogger(__name__)
+    logger = None
+    _use_cloud_logging = False
+
 allow_origins = ["*"]
 
 # Artifact bucket for ADK (created by Terraform, passed via env var)
@@ -43,7 +58,7 @@ app: FastAPI = get_fast_api_app(
     artifact_service_uri=artifact_service_uri,
     allow_origins=allow_origins,
     session_service_uri=session_service_uri,
-    otel_to_cloud=True,
+    otel_to_cloud=_use_cloud_logging,
 )
 app.title = "athlete-archetype-agent"
 app.description = "API for interacting with the Agent athlete-archetype-agent"
@@ -59,7 +74,10 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     Returns:
         Success message
     """
-    logger.log_struct(feedback.model_dump(), severity="INFO")
+    if _use_cloud_logging and logger:
+        logger.log_struct(feedback.model_dump(), severity="INFO")
+    else:
+        logging.getLogger(__name__).info("Feedback: %s", feedback.model_dump())
     return {"status": "success"}
 
 
