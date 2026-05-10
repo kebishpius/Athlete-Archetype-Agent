@@ -1,8 +1,7 @@
-"""
-Nano-banana Image Generation Service
+"""Nano-banana Image Generation Service
 Two-step pipeline using Vertex AI:
   1. Gemini Flash describes the user's likeness from their uploaded photo
-  2. Imagen 3 generates a cinematic Team USA action shot using that description
+  2. Nano Banana 2 (Gemini 3.1 Flash Image) generates a cinematic Team USA action shot using that description
 """
 import os
 import base64
@@ -16,7 +15,6 @@ import google.auth
 from google import genai
 from google.genai import types
 import vertexai
-from vertexai.preview.vision_models import ImageGenerationModel
 import PIL.Image
 
 app = FastAPI(title="Nano-banana Image Gen Service")
@@ -34,12 +32,12 @@ try:
 except Exception:
     PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "hackathons-461900")
 
-LOCATION = os.environ.get("GOOGLE_CLOUD_REGION", "us-central1")
+LOCATION = os.environ.get("GOOGLE_CLOUD_REGION", "global")
 
 # Initialize Vertex AI
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
-# GenAI client for Gemini vision (step 1)
+# Unified GenAI client for Gemini vision (step 1) and Nano Banana 2 (step 2)
 genai_client = genai.Client(
     vertexai=True,
     project=PROJECT_ID,
@@ -62,14 +60,15 @@ async def generate_action_shot(request: ImageGenRequest):
 
         # ── STEP 1: Use Gemini to describe the user's likeness ──
         likeness_prompt = (
-            "Describe this person's physical appearance in vivid detail for an "
-            "AI image generator. Include: face shape, skin tone, hair color and "
-            "style, eye color if visible, approximate age, body type, and any "
-            "distinctive features. Be specific and descriptive."
+            "Describe the overall athletic energy and physical build of this person "
+            "for a stylized 3D animation character. Focus on their build, "
+            "dynamic posture, and athletic presence. Do NOT describe specific "
+            "facial features or personal identifiers. Focus on creating a "
+            "heroic, stylized animation reference based on their energy."
         )
 
         vision_response = genai_client.models.generate_content(
-            model="gemini-2.0-flash-001",
+            model="gemini-3.1-flash-lite",
             contents=[
                 types.Part.from_bytes(
                     data=img_bytes,
@@ -80,39 +79,45 @@ async def generate_action_shot(request: ImageGenRequest):
         )
         likeness_description = vision_response.text.strip()
 
-        # ── STEP 2: Generate the action shot with Imagen 3 ──
-        imagen_model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-002")
-
+        # ── STEP 2: Generate the action shot with Nano Banana 2 ──
         action_prompt = (
-            f"Cinematic Olympic sports photograph of a Team USA athlete competing "
-            f"in {request.sport}. The athlete looks like: {likeness_description}. "
-            f"Wearing official red, white, and blue Team USA uniform. "
-            f"Dramatic Olympic stadium backdrop, packed crowd, cinematic lighting, "
-            f"heroic action pose inspired by {request.athlete_name}. "
-            f"Hyper-realistic, 8K, social-media-ready square crop, "
-            f"vibrant and inspirational."
+            f"High-quality 3D animation style character (Pixar or Overwatch style) "
+            f"competing in {request.sport}. The character is a stylized, heroic "
+            f"representation of the {request.archetype_name} archetype. "
+            f"The character has the following energy: {likeness_description}. "
+            f"Wearing official stylized Team USA athletic uniform (red, white, and blue). "
+            f"Dynamic action pose in a vibrant, stylized Olympic stadium arena. "
+            f"Clean lines, 3D render, expressive lighting, completely fictional character. "
+            f"NO real people, NO photorealism, NO individual athletes."
         )
 
-        images = imagen_model.generate_images(
-            prompt=action_prompt,
-            number_of_images=1,
-            aspect_ratio="1:1",
-            safety_filter_level="block_some",
-            person_generation="allow_adult",
+        # ── STEP 2: Generate the animation via Gemini image generation ──
+        # Use generate_content with IMAGE response modality
+        img_response = genai_client.models.generate_content(
+            model="gemini-3.1-flash-image-preview",
+            contents=[action_prompt],
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE", "TEXT"],
+            )
         )
 
-        if not images.images:
-            raise HTTPException(status_code=422, detail="Imagen returned no images.")
+        # Extract inline image data from response parts
+        image_part = None
+        for part in img_response.candidates[0].content.parts:
+            if part.inline_data is not None:
+                image_part = part
+                break
 
-        # Convert to base64 for the frontend
-        img_io = io.BytesIO()
-        images[0]._pil_image.save(img_io, format="PNG")
-        img_io.seek(0)
-        b64 = base64.b64encode(img_io.read()).decode("utf-8")
+        if image_part is None:
+            raise HTTPException(status_code=422, detail="Nano Banana 2 returned no image.")
+
+        # Convert the inline_data bytes to base64 for the frontend
+        b64 = base64.b64encode(image_part.inline_data.data).decode("utf-8")
+        mime = image_part.inline_data.mime_type or "image/png"
 
         return {
             "success": True,
-            "image_url": f"data:image/png;base64,{b64}"
+            "image_url": f"data:{mime};base64,{b64}"
         }
 
     except HTTPException:

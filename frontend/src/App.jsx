@@ -6,10 +6,10 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } fro
 
 import ReactMarkdown from 'react-markdown';
 
-const MatchCard = ({ athlete }) => {
+const MatchCard = ({ match }) => {
   const handleSearch = (e) => {
     e.stopPropagation();
-    const query = `${athlete.Name} ${athlete.Sport} Olympic Athlete`;
+    const query = `${match.Name} Olympic Event details`;
     window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
   };
 
@@ -19,20 +19,20 @@ const MatchCard = ({ athlete }) => {
       animate={{ opacity: 1, x: 0 }}
       whileHover={{ y: -5, scale: 1.02 }}
       onClick={handleSearch}
-      className={`athlete-match-card ${athlete.is_2028 ? 'prospect' : ''}`}
+      className="athlete-match-card"
       style={{ cursor: 'pointer' }}
     >
       <div className="card-header">
-        <Star size={16} fill="var(--gold)" color="var(--gold)" />
-        <span>{athlete.is_2028 ? 'LA 2028 Prospect' : `${athlete.Year} ${athlete.Medal || 'Olympian'}`}</span>
+        <Activity size={16} color="var(--gold)" />
+        <span>Recommended Olympic Event</span>
       </div>
-      <h3>{athlete.Name}</h3>
+      <h3>{match.Name}</h3>
       <div className="card-details">
-        <p><Activity size={14} /> {athlete.Sport}</p>
-        <p><MapPin size={14} /> {athlete.Event}</p>
+        <p><Activity size={14} /> {match.Sport}</p>
+        <p style={{ fontStyle: 'italic', opacity: 0.8 }}>{match.Event}</p>
       </div>
       <div className="card-footer-hint">
-        <span>Click to scout</span>
+        <span>Click to explore event</span>
         <ChevronRight size={14} />
       </div>
     </motion.div>
@@ -92,8 +92,8 @@ function App() {
   };
 
   const shareText = matches[0]
-    ? `🏅 I just discovered my Team USA archetype — I'm built like ${matches[0].Name} in ${matches[0].Sport}! Find yours 👇 #TeamUSA #Olympics #AthleteArchetype`
-    : `🏅 I just discovered my Team USA Olympic archetype! #TeamUSA #Olympics`;
+    ? `🏅 I just discovered my Olympic archetype — I'm built like ${matches[0].Name} in ${matches[0].Sport}! Find yours 👇 #Olympics #AthleteArchetype`
+    : `🏅 I just discovered my Olympic archetype! #TeamUSA #Olympics #AthleteArchetype`;
 
   const showToast = (msg, duration = 4000) => {
     setToast(msg);
@@ -112,7 +112,7 @@ function App() {
     // -- Mobile / native share path --
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: 'My Team USA Victory Shot', text: shareText });
+        await navigator.share({ files: [file], title: 'My Team USA Olympic Avatar', text: shareText });
         return;
       } catch (err) {
         if (err.name === 'AbortError') return; // user cancelled
@@ -143,7 +143,7 @@ function App() {
     if (url) window.open(url, '_blank');
 
     if (copied) {
-      showToast(`📋 Victory Shot copied! Paste it (Ctrl+V / ⌘V) into your ${platform === 'twitter' ? 'tweet' : platform === 'instagram' ? 'Instagram story' : 'post'}.`);
+      showToast(`📋 Olympic Avatar copied! Paste it (Ctrl+V / ⌘V) into your ${platform === 'twitter' ? 'tweet' : platform === 'instagram' ? 'Instagram story' : 'post'}.`);
     } else {
       showToast(`💡 Download the image and attach it to your post manually.`);
     }
@@ -326,8 +326,8 @@ function App() {
             const toolName = part.functionCall.name;
             const statusMap = {
               'get_athlete_cluster': '🧬 Clustering biometrics...',
-              'display_athlete_matches': '✨ Preparing your athlete cards...',
-              'google_search': '🌐 Scouting historical & future stars...'
+              'display_athlete_matches': '✨ Identifying your best Olympic events...',
+              'google_search': '🌐 Exploring Olympic event categories...'
             };
             setAgentStatus(statusMap[toolName] || `Running ${toolName}...`);
 
@@ -457,7 +457,7 @@ function App() {
           className="gradient-text"
           style={{ fontSize: '3.5rem', fontWeight: '800', margin: 0 }}
         >
-          TEAM USA
+          Team USA x Google Cloud Hackathon
         </motion.h1>
         <p style={{ color: 'var(--white)', letterSpacing: '4px', textTransform: 'uppercase', fontSize: '0.8rem', marginTop: '0.5rem', opacity: 0.8 }}>
           Athlete Archetype Agent
@@ -682,7 +682,7 @@ function App() {
 
                 {matches.length > 0 && (
                   <div className="matches-grid">
-                    {matches.map((a, i) => <MatchCard key={i} athlete={a} />)}
+                    {matches.map((m, i) => <MatchCard key={i} match={m} />)}
                   </div>
                 )}
                 {agentStatus && (
@@ -764,10 +764,10 @@ function App() {
                     <div className="victory-shot-section">
                       <h4 className="victory-shot-title">
                         <Camera size={18} style={{ marginRight: '0.5rem' }} />
-                        Generate Your Victory Shot
+                        Generate Your Olympic Avatar
                       </h4>
                       <p className="victory-shot-subtitle">
-                        See yourself competing as a Team USA {matches[0]?.Sport || 'Olympic'} athlete — shareable on social media.
+                        See your archetype as a stylized Team USA animation — shareable on social media.
                       </p>
 
                       {!victoryShot ? (
@@ -808,9 +808,9 @@ function App() {
                           disabled={isGeneratingShot || !matches[0]}
                         >
                           {isGeneratingShot ? (
-                            <><Loader2 size={18} className="spin" style={{ marginRight: '0.5rem' }} />Generating your Victory Shot...</>
+                            <><Loader2 size={18} className="spin" style={{ marginRight: '0.5rem' }} />Generating your Olympic Avatar...</>
                           ) : (
-                            <><Camera size={18} style={{ marginRight: '0.5rem' }} />Generate Victory Shot 🏅</>
+                            <><Camera size={18} style={{ marginRight: '0.5rem' }} />Generate Olympic Avatar 🏅</>
                           )}
                         </button>
                       ) : (
@@ -824,11 +824,11 @@ function App() {
                           <div className="victory-shot-badge">🥇 VICTORY SHOT</div>
                           <img
                             src={victoryShot}
-                            alt={`You as a Team USA ${matches[0].Sport} athlete`}
+                            alt={`Stylized animation character for ${matches[0].Name}`}
                             className="victory-shot-img"
                           />
                           <div className="victory-shot-footer">
-                            <p><strong>You</strong> competing as a {matches[0].Sport} athlete — inspired by <strong>{matches[0].Name}</strong></p>
+                            <p><strong>You</strong> as an animated character in the {matches[0].Name} event — your perfect Olympic fit!</p>
                             <div className="victory-shot-actions">
                               <button className="btn-share share-main" onClick={() => setShowShareModal(true)}>
                                 <Share2 size={16} style={{ marginRight: '0.4rem' }} />Share
@@ -938,7 +938,7 @@ function App() {
       </main>
       
       <footer style={{ marginTop: '4rem', opacity: 0.5, fontSize: '0.75rem', textAlign: 'center' }}>
-        <p>© 2026 Team USA Hackathon • Challenge 4: The Athlete Archetype Agent</p>
+        <p>© 2026 Team USA x Google Cloud Hackathon • Challenge 4: The Athlete Archetype Agent</p>
         <p>Built with Gemini 3.0 Flash Lite & Google ADK</p>
       </footer>
     </div>
