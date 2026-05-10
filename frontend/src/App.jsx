@@ -6,25 +6,41 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } fro
 
 import ReactMarkdown from 'react-markdown';
 
-const MatchCard = ({ athlete }) => (
-  <motion.div 
-    initial={{ opacity: 0, x: 20 }}
-    animate={{ opacity: 1, x: 0 }}
-    className={`athlete-match-card ${athlete.is_2028 ? 'prospect' : ''}`}
-  >
-    <div className="card-header">
-      <Star size={16} fill="var(--gold)" color="var(--gold)" />
-      <span>{athlete.is_2028 ? 'LA 2028 Prospect' : `${athlete.Year} ${athlete.Medal || 'Olympian'}`}</span>
-    </div>
-    <h3>{athlete.Name}</h3>
-    <div className="card-details">
-      <p><Activity size={14} /> {athlete.Sport}</p>
-      <p><MapPin size={14} /> {athlete.Event}</p>
-    </div>
-  </motion.div>
-);
+const MatchCard = ({ athlete }) => {
+  const handleSearch = (e) => {
+    e.stopPropagation();
+    const query = `${athlete.Name} ${athlete.Sport} Olympic Athlete`;
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      whileHover={{ y: -5, scale: 1.02 }}
+      onClick={handleSearch}
+      className={`athlete-match-card ${athlete.is_2028 ? 'prospect' : ''}`}
+      style={{ cursor: 'pointer' }}
+    >
+      <div className="card-header">
+        <Star size={16} fill="var(--gold)" color="var(--gold)" />
+        <span>{athlete.is_2028 ? 'LA 2028 Prospect' : `${athlete.Year} ${athlete.Medal || 'Olympian'}`}</span>
+      </div>
+      <h3>{athlete.Name}</h3>
+      <div className="card-details">
+        <p><Activity size={14} /> {athlete.Sport}</p>
+        <p><MapPin size={14} /> {athlete.Event}</p>
+      </div>
+      <div className="card-footer-hint">
+        <span>Click to scout</span>
+        <ChevronRight size={14} />
+      </div>
+    </motion.div>
+  );
+};
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const IMAGE_GEN_URL = import.meta.env.VITE_IMAGE_GEN_URL || 'http://localhost:8001';
 
 function App() {
   const [step, setStep] = useState(1);
@@ -765,7 +781,7 @@ function App() {
                               // Strip the data URL prefix to get raw base64
                               const base64Data = imagePreview.split(',')[1];
                               const mimeType = imagePreview.split(';')[0].split(':')[1] || 'image/jpeg';
-                              const res = await fetch('http://localhost:8001/generate-action-shot', {
+                              const res = await fetch(`${IMAGE_GEN_URL}/generate-action-shot`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({

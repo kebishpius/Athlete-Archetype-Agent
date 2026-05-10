@@ -6,3 +6,6 @@ google-genai
 fastapi
 uvicorn
 streamlit
+Pillow
+google-cloud-aiplatform
+google-adk

@@ -395,11 +395,17 @@ header, main, footer {
   background: rgba(255, 255, 255, 0.07);
   transform: translateY(-4px);
   border-color: var(--gold);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(212, 175, 55, 0.1);
 }
 
 .athlete-match-card.prospect {
   border-color: var(--usa-red);
   background: rgba(191, 10, 48, 0.05);
+}
+
+.athlete-match-card.prospect:hover {
+  border-color: var(--usa-red);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(191, 10, 48, 0.2);
 }
 
 .athlete-match-card.prospect .card-header {
@@ -434,6 +440,28 @@ header, main, footer {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.card-footer-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--gold);
+  opacity: 0;
+  transition: all 0.3s ease;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.athlete-match-card:hover .card-footer-hint {
+  opacity: 1;
+}
+
+.athlete-match-card.prospect .card-footer-hint {
+  color: var(--usa-red);
+  border-top-color: rgba(191, 10, 48, 0.1);
 }
 
 .athlete-match-card .card-details p {
