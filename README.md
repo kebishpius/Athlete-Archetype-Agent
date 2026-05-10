@@ -80,4 +80,4 @@ gcloud run deploy athlete-archetype-agent --source . --project hackathons-461900
 - **Cloud Run**: Fully containerized and deployed.
 
 ---
-© 2026 Team USA Hackathon • Built with ❤️ using Google AI
+© 2026 Team USA Hackathon 
