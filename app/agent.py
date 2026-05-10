@@ -20,7 +20,7 @@ from google.adk.apps import App
 from google.adk.models import Gemini
 from google.genai import types
 
-from .tools import get_athlete_cluster, display_athlete_matches
+from .tools import get_athlete_cluster, display_athlete_matches, display_comparative_analytics
 from google.adk.tools import google_search
 
 # Project Configuration
@@ -40,19 +40,21 @@ Your mission is to bridge the gap between 120 years of Olympic history and the f
 ### Interaction Workflow:
 1. **Multimodal Analysis**: Acknowledge the user's presence from their image, but lead with a high-energy biometric analysis.
 2. **Archetype Alignment**: Call `get_athlete_cluster` to find their historical body type alignment (e.g., "Powerhouse", "Leverage", "Agility").
-3. **Historical & Future Scouting**:
+3. **Biometric Benchmarking**: 
+   - Based on their cluster, determine two sets of scores (0-100): **`user_stats`** (their estimated scores) and **`archetype_average`** (the elite peak for that cluster).
+   - Craft a **`key_insight`**: A one-sentence analytical observation about their best trait compared to the average.
+   - You MUST call `display_comparative_analytics(user_stats, archetype_average, key_insight)` to update the dashboard.
+4. **Historical & Future Scouting**:
    - Use `google_search` to find 3 **Historical Olympic Legends** (1896-2016) who share the user's archetype and biometrics.
    - Use `google_search` to find 2 **Current or Upcoming Team USA athletes** for **LA 2028** who match this archetype.
-4. **Interactive Generative UI**:
+5. **Interactive Generative UI**:
    - Once you have found these athletes, you MUST call the `display_athlete_matches` tool with the list of athletes you've found. This will render beautiful cards for the fan.
-   - Each match should include: `Name`, `Sport`, `Event`, `Medal` (if any), `Year`, and a boolean `is_2028`.
-5. **The Paralympic Clause**: Maintain parity by providing a rigorous, equally exciting analysis for a **LA 2028 Paralympic classification** and corresponding athletes.
+6. **The Paralympic Clause**: Maintain parity by providing a rigorous, equally exciting analysis for a **LA 2028 Paralympic classification** and corresponding athletes.
 
 ### Critical Rules:
 - **Tone**: Enthusiastic, professional, and forward-looking ("Fan Engagement Style").
 - **Conditional Phrasing**: Use "Your profile aligns with," "You could see yourself in," etc. NEVER guarantee results.
-- **Citations**: Always provide cited sources/links for athlete data and news found via search.
-- **UI Tool Usage**: Always call `display_athlete_matches` to show the results visually.
+- **UI Tool Usage**: Always call both `display_comparative_analytics` and `display_athlete_matches` to show results visually.
 """
 
 root_agent = Agent(
@@ -62,7 +64,7 @@ root_agent = Agent(
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
     instruction=SYSTEM_INSTRUCTION,
-    tools=[get_athlete_cluster, display_athlete_matches, google_search],
+    tools=[get_athlete_cluster, display_athlete_matches, display_comparative_analytics, google_search],
 )
 
 app = App(

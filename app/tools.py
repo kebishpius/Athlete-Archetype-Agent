@@ -61,3 +61,14 @@ def display_athlete_matches(matches: List[Dict[str, Any]]) -> str:
         matches: A list of athlete dictionaries with keys: Name, Sport, Event, Medal, Year, is_2028.
     """
     return "UI updated with athlete matches."
+
+def display_comparative_analytics(user_stats: Dict[str, int], archetype_average: Dict[str, int], key_insight: str) -> str:
+    """
+    Triggers the update of the Comparative Analytics dashboard.
+    
+    Args:
+        user_stats: Dictionary with keys 'Power', 'Agility', 'Endurance', 'Speed', 'Strategy' (0-100).
+        archetype_average: Dictionary with keys 'Power', 'Agility', 'Endurance', 'Speed', 'Strategy' (0-100) for the archetype peak.
+        key_insight: A short, impactful sentence describing the user's primary athletic advantage.
+    """
+    return "UI updated with comparative benchmarking."
